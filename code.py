@@ -1,56 +1,60 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+st.set_page_config(page_title="ESG AI App", layout="centered")
 
 # -----------------------------
-# 1. Create Synthetic ESG Dataset
+# 1. Create Synthetic Dataset
 # -----------------------------
 
-data = {
-    "Carbon_Emission":[85,30,60,90,45,70,25,88,55,35],
-    "Board_Diversity":[12,40,25,10,35,20,50,15,28,38],
-    "Debt_Ratio":[0.70,0.30,0.55,0.80,0.40,0.65,0.25,0.75,0.50,0.35],
-    "Renewable":[10,55,30,5,45,20,60,12,35,50],
-    "Turnover":[22,10,18,25,12,20,8,24,15,11],
-    "ESG_Risk":["High","Low","Medium","High","Low","Medium","Low","High","Medium","Low"]
-}
+@st.cache_resource
+def train_model():
 
-df = pd.DataFrame(data)
+    data = {
+        "Carbon_Emission":[85,30,60,90,45,70,25,88,55,35],
+        "Board_Diversity":[12,40,25,10,35,20,50,15,28,38],
+        "Debt_Ratio":[0.70,0.30,0.55,0.80,0.40,0.65,0.25,0.75,0.50,0.35],
+        "Renewable":[10,55,30,5,45,20,60,12,35,50],
+        "Turnover":[22,10,18,25,12,20,8,24,15,11],
+        "ESG_Risk":[2,0,1,2,0,1,0,2,1,0]  # 0=Low, 1=Medium, 2=High
+    }
 
-# -----------------------------
-# 2. Preprocessing
-# -----------------------------
+    df = pd.DataFrame(data)
 
-le = LabelEncoder()
-df["ESG_Risk"] = le.fit_transform(df["ESG_Risk"])
+    X = df.drop("ESG_Risk", axis=1)
+    y = df["ESG_Risk"]
 
-X = df.drop("ESG_Risk", axis=1)
-y = df["ESG_Risk"]
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_scaled, y, test_size=0.2, random_state=42
+    )
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, y, test_size=0.2, random_state=42
-)
+    model = Sequential()
+    model.add(Dense(16, activation='relu', input_shape=(5,)))
+    model.add(Dense(8, activation='relu'))
+    model.add(Dense(3, activation='softmax'))
 
-# -----------------------------
-# 3. Build ANN Model
-# -----------------------------
+    model.compile(
+        loss='sparse_categorical_crossentropy',
+        optimizer='adam',
+        metrics=['accuracy']
+    )
 
-model = Sequential()
-model.add(Dense(16, activation='relu', input_dim=5))
-model.add(Dense(8, activation='relu'))
-model.add(Dense(3, activation='softmax'))
+    model.fit(X_train, y_train, epochs=100, verbose=0)
 
-model.compile(loss='sparse_categorical_crossentropy',
-              optimizer='adam',
-              metrics=['accuracy'])
+    return model, scaler
 
-model.fit(X_train, y_train, epochs=100, verbose=0)
+model, scaler = train_model()
 
 # -----------------------------
-# 4. Streamlit UI
+# 2. UI
 # -----------------------------
 
 st.title("🌍 ESG Risk Prediction & AI Sustainability Report")
@@ -70,12 +74,14 @@ if st.button("Predict ESG Risk"):
 
     prediction = model.predict(input_scaled)
     predicted_class = np.argmax(prediction)
-    risk_label = le.inverse_transform([predicted_class])[0]
+
+    risk_labels = {0: "Low", 1: "Medium", 2: "High"}
+    risk_label = risk_labels[predicted_class]
 
     st.subheader(f"📊 Predicted ESG Risk: {risk_label}")
 
     # -----------------------------
-    # 5. Simple AI-Style Report Generator
+    # 3. Simple AI-Style Report
     # -----------------------------
 
     st.subheader("🤖 AI-Generated ESG Report")
@@ -83,48 +89,47 @@ if st.button("Predict ESG Risk"):
     report = f"""
     This company shows a {risk_label} ESG risk profile.
 
-    Key Observations:
-    - Carbon Emission Level: {carbon}
+    Key Metrics:
+    - Carbon Emission: {carbon}
     - Board Diversity: {diversity}%
     - Debt Ratio: {debt}
-    - Renewable Usage: {renewable}%
+    - Renewable Energy Usage: {renewable}%
     - Employee Turnover: {turnover}%
 
     """
 
     if risk_label == "High":
         report += """
-        Risk Analysis:
-        High emissions and governance weaknesses are major contributors.
-        Immediate sustainability restructuring is recommended.
+        Major sustainability risks detected.
+        High emissions and governance weaknesses require immediate strategic intervention.
 
         Recommended Actions:
-        - Reduce carbon emissions by 20% within 3 years
-        - Increase renewable energy adoption above 50%
-        - Improve board diversity to at least 35%
-        - Strengthen ESG disclosures and transparency
+        • Reduce carbon emissions by 20% over 3 years
+        • Increase renewable energy usage above 50%
+        • Improve board diversity beyond 35%
+        • Strengthen ESG transparency
         """
 
     elif risk_label == "Medium":
         report += """
-        Risk Analysis:
-        Moderate ESG exposure detected. Some sustainability measures exist but improvements are needed.
+        Moderate ESG exposure.
+        Sustainability practices exist but require improvement.
 
         Recommended Actions:
-        - Gradually reduce emissions
-        - Increase renewable usage to 50%
-        - Improve governance diversity
+        • Gradually reduce emissions
+        • Increase renewable energy investment
+        • Enhance governance diversity
         """
 
     else:
         report += """
-        Risk Analysis:
-        Strong ESG profile detected with sustainable practices in place.
+        Strong ESG positioning detected.
+        Sustainable practices are well implemented.
 
-        Recommendations:
-        - Maintain renewable energy investments
-        - Continue governance transparency
-        - Focus on long-term sustainability innovation
+        Recommended Actions:
+        • Maintain renewable investment
+        • Continue governance improvements
+        • Focus on innovation-driven sustainability
         """
 
     st.write(report)
